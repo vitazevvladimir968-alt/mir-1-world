@@ -1,0 +1,23 @@
+name: Build world
+on:
+  push:
+    branches: [new-world-v1]
+    paths:
+      - 'new-world/**'
+      - '.github/workflows/build-world.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: new-world
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build
