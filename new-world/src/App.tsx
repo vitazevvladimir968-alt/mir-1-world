@@ -101,5 +101,5 @@ export default function App(){
   const resize=()=>{camera.aspect=el.clientWidth/el.clientHeight;camera.updateProjectionMatrix();renderer.setSize(el.clientWidth,el.clientHeight)};window.addEventListener('resize',resize);
   return()=>{alive=false;cancelAnimationFrame(frame);window.removeEventListener('resize',resize);renderer.domElement.removeEventListener('pointerdown',start);renderer.domElement.removeEventListener('pointermove',move);renderer.domElement.removeEventListener('pointerup',end);renderer.domElement.removeEventListener('pointercancel',end);renderer.domElement.removeEventListener('wheel',wheel);mixers.forEach(m=>m.stopAllAction());renderer.dispose();el.removeChild(renderer.domElement);scene.clear()};
  },[]);
- return <main className="world-view"><div ref={mount} className="world-canvas" aria-label="Самостоятельно развивающийся 3D-мир"/></main>;
+ return <main className="world-view"><div ref={mount} className="world-canvas" aria-label="Самостоятельно развивающийся 3D-мир"/><div style={{position:"absolute",right:8,bottom:6,fontSize:10,color:"rgba(255,255,255,.7)",textShadow:"0 1px 3px #26332a",pointerEvents:"none"}}>Textures: Poly Haven · CC0</div></main>;
 }
