@@ -79,10 +79,20 @@ export default function App(){
    if(era>=1&&fields.children.length<100){for(let i=0;i<3;i++){const crop=new THREE.Mesh(new THREE.ConeGeometry(.07,.35,5),mat('#9ba85b'));crop.position.set(-1.3+Math.random()*2.6,.15,Math.random()*2);fields.add(crop)}}
    renderer.render(scene,camera)}
   animate();
-  let down=false,lx=0,ly=0;const start=(e:PointerEvent)=>{down=true;lx=e.clientX;ly=e.clientY};const move=(e:PointerEvent)=>{if(!down)return;const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;camera.position.x=THREE.MathUtils.clamp(camera.position.x-dx*.025,-24,24);camera.position.z=THREE.MathUtils.clamp(camera.position.z-dy*.025,9,34);camera.lookAt(0,0,0)};const end=()=>down=false;
-  renderer.domElement.addEventListener('pointerdown',start);renderer.domElement.addEventListener('pointermove',move);window.addEventListener('pointerup',end);
+  // Touch: one finger rotates/pans the view; two fingers pinch to zoom.
+  let down=false,lx=0,ly=0;let pinchDistance=0;let pinchMidX=0,pinchMidY=0;
+  const minCameraDistance=7,maxCameraDistance=42;
+  const zoomBy=(factor:number)=>{const offset=camera.position.clone().sub(new THREE.Vector3(0,0,0));offset.multiplyScalar(factor);const distance=THREE.MathUtils.clamp(offset.length(),minCameraDistance,maxCameraDistance);offset.setLength(distance);camera.position.copy(offset);camera.lookAt(0,0,0)};
+  const touchDistance=(e:PointerEvent[])=>Math.hypot(e[0].clientX-e[1].clientX,e[0].clientY-e[1].clientY);
+  const activePointers=new Map<number,{x:number;y:number}>();
+  const start=(e:PointerEvent)=>{activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(activePointers.size===1){down=true;lx=e.clientX;ly=e.clientY}else if(activePointers.size===2){down=false;const pts=[...activePointers.values()];pinchDistance=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);pinchMidX=(pts[0].x+pts[1].x)/2;pinchMidY=(pts[0].y+pts[1].y)/2}};
+  const move=(e:PointerEvent)=>{if(!activePointers.has(e.pointerId))return;activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(activePointers.size>=2){const pts=[...activePointers.values()];const dist=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);if(pinchDistance>0&&dist>0)zoomBy(pinchDistance/dist);pinchDistance=dist;pinchMidX=(pts[0].x+pts[1].x)/2;pinchMidY=(pts[0].y+pts[1].y)/2;down=false;return}if(!down)return;const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;camera.position.x=THREE.MathUtils.clamp(camera.position.x-dx*.025,-30,30);camera.position.z=THREE.MathUtils.clamp(camera.position.z-dy*.025,6,42);camera.lookAt(0,0,0)};
+  const end=(e:PointerEvent)=>{activePointers.delete(e.pointerId);pinchDistance=0;down=false;if(activePointers.size===1){const p=[...activePointers.values()][0];lx=p.x;ly=p.y;down=true}};
+  renderer.domElement.style.touchAction='none';
+  renderer.domElement.addEventListener('pointerdown',start);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',end);renderer.domElement.addEventListener('pointercancel',end);
+  const wheel=(e:WheelEvent)=>{e.preventDefault();zoomBy(e.deltaY>0?1.08:.92)};renderer.domElement.addEventListener('wheel',wheel,{passive:false});
   const resize=()=>{camera.aspect=el.clientWidth/el.clientHeight;camera.updateProjectionMatrix();renderer.setSize(el.clientWidth,el.clientHeight)};window.addEventListener('resize',resize);
-  return()=>{alive=false;cancelAnimationFrame(frame);window.removeEventListener('resize',resize);window.removeEventListener('pointerup',end);renderer.domElement.removeEventListener('pointerdown',start);renderer.domElement.removeEventListener('pointermove',move);mixers.forEach(m=>m.stopAllAction());renderer.dispose();el.removeChild(renderer.domElement);scene.clear()};
+  return()=>{alive=false;cancelAnimationFrame(frame);window.removeEventListener('resize',resize);renderer.domElement.removeEventListener('pointerdown',start);renderer.domElement.removeEventListener('pointermove',move);renderer.domElement.removeEventListener('pointerup',end);renderer.domElement.removeEventListener('pointercancel',end);renderer.domElement.removeEventListener('wheel',wheel);mixers.forEach(m=>m.stopAllAction());renderer.dispose();el.removeChild(renderer.domElement);scene.clear()};
  },[]);
  return <main className="world-view"><div ref={mount} className="world-canvas" aria-label="Самостоятельно развивающийся 3D-мир"/></main>;
 }
