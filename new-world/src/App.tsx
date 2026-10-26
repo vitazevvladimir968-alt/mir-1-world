@@ -102,9 +102,22 @@ export default function App(){
       if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);mixer.clipAction(gltf.animations[0]).play();animalMixers.push(mixer)}
     },undefined,()=>{/* The village remains playable if the external asset host is unavailable. */});
   }
-  // The field edge becomes a small pasture with two distinct cattle models.
-  addFarmAnimal('https://cdn.3dassets.dev/assets/5009/v1/model.glb',5.9,2.8,1.35,Math.PI*.5);
-  addFarmAnimal('https://cdn.3dassets.dev/assets/5010/v1/model.glb',7.3,3.4,1.3,-Math.PI*.5);
+  // Pasture animals: recognizable lightweight meshes work even when external asset hosts fail.
+  function makeAnimal(kind:'cow'|'sheep'|'hen',x:number,z:number,scale=1){
+    const g=new THREE.Group();
+    const coat=kind==='cow'?new THREE.MeshStandardMaterial({color:'#f1eee5',roughness:.95}):kind==='sheep'?new THREE.MeshStandardMaterial({color:'#e4dfd1',roughness:1}):new THREE.MeshStandardMaterial({color:'#a64b32',roughness:.9});
+    const dark=mat(kind==='cow'?'#302a25':kind==='sheep'?'#55463a':'#c58d24');
+    const body=new THREE.Mesh(new THREE.SphereGeometry(kind==='hen'?.22:.34,14,10),coat);body.scale.set(kind==='hen'?1.05:1.35,.82,.78);body.position.y=kind==='hen'?.34:.62;body.castShadow=!isMobile;g.add(body);
+    if(kind==='cow'){for(const [sx,sz] of [[-.18,-.1],[.2,.12],[-.1,.2]] as number[][]){const patch=new THREE.Mesh(new THREE.SphereGeometry(.11,8,6),mat('#39332e'));patch.position.set(sx,.68,sz);patch.scale.set(1,.7,.5);g.add(patch)}}
+    if(kind==='sheep'){for(let i=0;i<7;i++){const wool=new THREE.Mesh(new THREE.SphereGeometry(.14,8,6),coat);wool.position.set(Math.cos(i*2.4)*.22,.72+Math.sin(i*2.4)*.12,Math.sin(i*2.4)*.22);g.add(wool)}}
+    const head=new THREE.Mesh(new THREE.SphereGeometry(kind==='hen'?.12:.17,12,8),coat);head.position.set(.34,kind==='hen'?.52:.78,.02);head.castShadow=!isMobile;g.add(head);
+    if(kind==='hen'){const beak=new THREE.Mesh(new THREE.ConeGeometry(.055,.13,5),mat('#e3a52c'));beak.rotation.z=-Math.PI/2;beak.position.set(.48,.51,.02);g.add(beak);const comb=new THREE.Mesh(new THREE.SphereGeometry(.055,6,5),mat('#b52d28'));comb.position.set(.32,.64,.01);g.add(comb)}
+    else {const muzzle=new THREE.Mesh(new THREE.SphereGeometry(.09,8,6),kind==='cow'?mat('#b9867a'):dark);muzzle.position.set(.47,kind==='cow'?.74:.77,.02);g.add(muzzle);for(const zz of [-.1,.1]){const ear=new THREE.Mesh(new THREE.ConeGeometry(.07,.18,5),dark);ear.position.set(.28,.94,zz);ear.rotation.z=-.7;g.add(ear)}}
+    const legMat=kind==='cow'?dark:mat('#59483a');for(const sx of [-.2,.2])for(const sz of [-.15,.15]){const leg=new THREE.Mesh(new THREE.CylinderGeometry(.035,.045,kind==='hen'?.17:.34,6),legMat);leg.position.set(sx,kind==='hen'?.15:.25,sz);leg.castShadow=!isMobile;g.add(leg)}
+    g.position.set(x,0,z);g.scale.setScalar(scale);g.rotation.y=(Math.random()-.5)*Math.PI;scene.add(g);return g;
+  }
+  makeAnimal('cow',5.9,2.8,.95);makeAnimal('cow',7.25,3.4,.9);makeAnimal('sheep',6.8,4.25,.72);
+  for(let i=0;i<4;i++)makeAnimal('hen',4.9+(i%2)*.45,3.7+Math.floor(i/2)*.42,.65);
   // Work cycles create actual resources; villagers are assigned persistent professions.
   const workSites=[new THREE.Vector3(4,0,-1),new THREE.Vector3(-3.6,0,2.2),new THREE.Vector3(0,0,2.7),new THREE.Vector3(0,0,0),new THREE.Vector3(-1,0,0)];
   // Autonomous time, seasons, population, and gradual village expansion.
