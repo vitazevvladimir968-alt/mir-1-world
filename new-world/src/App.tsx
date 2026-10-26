@@ -80,13 +80,38 @@ export default function App(){
   },undefined,()=>{ /* Keep the procedural fallback if the remote model cannot load. */ });
   function newTarget(p:Person){const now=new Date();const hour=now.getHours()+now.getMinutes()/60;if(hour<6.5||hour>=21.5){const home=homes[p.home%Math.max(1,homes.length)];if(home)p.target.set(home.position.x+(Math.random()-.5)*.45,0,home.position.z+.92+(Math.random()-.5)*.18);else p.target.set(0,0,0);return}const jobs=[[-3.6,2.2],[4,-1],[0,2.7],[-1,0],[0,2.7]];const j=jobs[p.job%jobs.length];if(p.job===0)p.target.set(j[0]+(Math.random()-.5)*1.2,0,j[1]+(Math.random()-.5)*1.2);else if(p.job===1)p.target.set(-3.6+(Math.random()-.5)*1.5,0,2.2+(Math.random()-.5)*1.5);else if(p.job===2)p.target.set((Math.random()-.5)*2,0,2.7+(Math.random()-.5)*1.2);else if(p.job===3)p.target.set((Math.random()-.5)*2,0,(Math.random()-.5)*2);else p.target.set((Math.random()-.5)*8,0,(Math.random()-.5)*7);if(Math.random()<.2)p.target.set((Math.random()-.5)*9,0,(Math.random()-.5)*8)}
   people.forEach(newTarget);
+
+  // CC0 farm animals hosted on a permanent CDN; keep the first pass light for mobile.
+  // Static cow models are scaled from their authored bounds so the world uses metre-like units.
+  const animalLoader = new GLTFLoader();
+  const animalMixers: THREE.AnimationMixer[] = [];
+  function addFarmAnimal(url:string, x:number, z:number, desiredLength:number, yaw=0){
+    animalLoader.load(url,(gltf)=>{
+      if(!alive){gltf.scene.traverse(o=>{const m=o as THREE.Mesh;if(m.isMesh){m.geometry.dispose()}});return}
+      const model=gltf.scene;
+      const bounds=new THREE.Box3().setFromObject(model);
+      const size=bounds.getSize(new THREE.Vector3());
+      const longest=Math.max(size.x,size.y,size.z);
+      if(!Number.isFinite(longest)||longest<=0)return;
+      model.scale.setScalar(desiredLength/longest);
+      const scaledBounds=new THREE.Box3().setFromObject(model);
+      model.position.y-=scaledBounds.min.y;
+      model.position.x+=x;model.position.z+=z;model.rotation.y=yaw;
+      model.traverse(o=>{const m=o as THREE.Mesh;if(m.isMesh){m.castShadow=!isMobile;m.receiveShadow=true;m.frustumCulled=true}});
+      scene.add(model);
+      if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);mixer.clipAction(gltf.animations[0]).play();animalMixers.push(mixer)}
+    },undefined,()=>{/* The village remains playable if the external asset host is unavailable. */});
+  }
+  // The field edge becomes a small pasture with two distinct cattle models.
+  addFarmAnimal('https://cdn.3dassets.dev/assets/5009/v1/model.glb',5.9,2.8,1.35,Math.PI*.5);
+  addFarmAnimal('https://cdn.3dassets.dev/assets/5010/v1/model.glb',7.3,3.4,1.3,-Math.PI*.5);
   // Work cycles create actual resources; villagers are assigned persistent professions.
   const workSites=[new THREE.Vector3(4,0,-1),new THREE.Vector3(-3.6,0,2.2),new THREE.Vector3(0,0,2.7),new THREE.Vector3(0,0,0),new THREE.Vector3(-1,0,0)];
   // Autonomous time, seasons, population, and gradual village expansion.
   let elapsed=0,day=0,food=40,woodCount=30,nextBuild=24,nextBirth=38,nextTech=75;let era:Era=0;const landmarks:THREE.Group[]=[];let nextHarvest=7,nextLesson=12,nextFamily=50,nextTrade=32;
   const clock=new THREE.Clock();let frame=0,alive=true;
   function animate(){if(!alive)return;frame=requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);elapsed+=dt;const now=new Date();const hour=now.getHours()+now.getMinutes()/60+now.getSeconds()/3600;const working=hour>=6.5&&hour<20.5;const month=now.getMonth();const season=month===11||month<=1?0:month<=4?1:month<=7?2:3;day=hour/24;const solar=Math.sin(((hour-6)/12)*Math.PI);const daylight=THREE.MathUtils.clamp(.5+.5*Math.sin(((hour-6)/24)*Math.PI*2),0,1);sun.intensity=.08+3.0*daylight;hemi.intensity=.35+1.25*daylight;const seasonalSky=season===0?new THREE.Color('#c4d1dc'):season===1?new THREE.Color('#c3d8d0'):season===2?new THREE.Color('#b9cbd0'):new THREE.Color('#d2bca3');const sky=new THREE.Color('#111d35').lerp(seasonalSky,daylight);scene.background=sky;scene.fog.color.copy(sky);const sunAngle=((hour-12)/24)*Math.PI*2;sun.position.set(Math.cos(sunAngle)*18,3+Math.max(0,solar)*20,Math.sin(sunAngle)*14);
-   mixers.forEach(m=>m.update(dt));
+   mixers.forEach(m=>m.update(dt));animalMixers.forEach(m=>m.update(dt));
    people.forEach(p=>{p.wait-=dt;if(p.wait<=0&&p.group.position.distanceTo(p.target)<.3){newTarget(p);p.wait=1+Math.random()*2;p.task++}const d=new THREE.Vector3().subVectors(p.target,p.group.position);const distance=d.length();const moving=distance>.12;if(moving){d.normalize();const step=Math.min(distance-.06,p.speed*dt*(working?1:.72));if(step>0)p.group.position.addScaledVector(d,step);p.group.rotation.y=Math.atan2(d.x,d.z);p.limbs.forEach((limb,j)=>{limb.rotation.x=Math.sin(elapsed*8+p.phase)*(j%2===0?.5:.38)})}else p.limbs.forEach(l=>l.rotation.x=0);p.group.position.y=moving?Math.abs(Math.sin(elapsed*8+p.phase))*.008:0;p.age+=dt*.00008;p.workTimer-=dt;if(working&&p.workTimer<=0&&p.group.position.distanceTo(p.target)<.55){p.workTimer=2.5+Math.random()*2.5;if(p.job===0){foodStock+=.35*(1+p.skill*.15);p.skill=Math.min(10,p.skill+.015)}else if(p.job===1){woodStock+=.24;p.skill=Math.min(10,p.skill+.012)}else if(p.job===2){stoneStock+=.16;p.skill=Math.min(10,p.skill+.01)}else if(p.job===3){knowledge+=.16;p.skill=Math.min(10,p.skill+.012)}else{community+=.12;p.skill=Math.min(10,p.skill+.01)}}});
    // Population gradually increases when food and shelter exist; new houses appear without player input.
    if(elapsed>nextTech&&era<3&&knowledge>=(era+1)*8&&foodStock>10){era=(era+1) as Era;nextTech=elapsed+105;const landmark=new THREE.Group();const x=-5+era*3.2,z=-4+era*.5;if(era===1){const base=new THREE.Mesh(new THREE.CylinderGeometry(.55,.7,1.5,8),new THREE.MeshStandardMaterial({map:stone}));base.position.y=.75;landmark.add(base);const top=new THREE.Mesh(new THREE.ConeGeometry(.62,.8,8),new THREE.MeshStandardMaterial({map:roofTex}));top.position.y=1.9;landmark.add(top)}else if(era===2){const base=new THREE.Mesh(new THREE.BoxGeometry(1.6,2.8,1.4),mat('#b8b4a5'));base.position.y=1.4;landmark.add(base);for(let f=0;f<4;f++){const w=new THREE.Mesh(new THREE.BoxGeometry(.25,.3,.04),mat('#719eaa'));w.position.set(-.4+f*.27,.7,.73);landmark.add(w)}}else{const base=new THREE.Mesh(new THREE.BoxGeometry(1.5,4.2,1.5),new THREE.MeshStandardMaterial({color:'#9ebdc5',metalness:.3,roughness:.25}));base.position.y=2.1;landmark.add(base);for(let f=0;f<7;f++){const w=new THREE.Mesh(new THREE.BoxGeometry(.9,.12,.04),mat('#e1e9d8'));w.position.set(0,.65+f*.5,.77);landmark.add(w)}}landmark.position.set(x,0,z);landmark.traverse(o=>{if((o as THREE.Mesh).isMesh)(o as THREE.Mesh).castShadow=true});scene.add(landmark);landmarks.push(landmark);const newHome=house(x+1.8,z+1.2,.95,era);if(era===0)detailHouse(newHome,.95);homes.push(newHome)}
@@ -118,7 +143,7 @@ export default function App(){
   renderer.domElement.addEventListener('pointerdown',start);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',end);renderer.domElement.addEventListener('pointercancel',end);
   const wheel=(e:WheelEvent)=>{e.preventDefault();zoomBy(e.deltaY>0?1.08:.92)};renderer.domElement.addEventListener('wheel',wheel,{passive:false});
   const resize=()=>{camera.aspect=el.clientWidth/el.clientHeight;camera.updateProjectionMatrix();renderer.setSize(el.clientWidth,el.clientHeight)};window.addEventListener('resize',resize);
-  return()=>{alive=false;cancelAnimationFrame(frame);window.removeEventListener('resize',resize);renderer.domElement.removeEventListener('pointerdown',start);renderer.domElement.removeEventListener('pointermove',move);renderer.domElement.removeEventListener('pointerup',end);renderer.domElement.removeEventListener('pointercancel',end);renderer.domElement.removeEventListener('wheel',wheel);mixers.forEach(m=>m.stopAllAction());renderer.dispose();el.removeChild(renderer.domElement);scene.clear()};
+  return()=>{alive=false;cancelAnimationFrame(frame);window.removeEventListener('resize',resize);renderer.domElement.removeEventListener('pointerdown',start);renderer.domElement.removeEventListener('pointermove',move);renderer.domElement.removeEventListener('pointerup',end);renderer.domElement.removeEventListener('pointercancel',end);renderer.domElement.removeEventListener('wheel',wheel);mixers.forEach(m=>m.stopAllAction());animalMixers.forEach(m=>m.stopAllAction());renderer.dispose();el.removeChild(renderer.domElement);scene.clear()};
  },[]);
  return <main className="world-view"><div ref={mount} className="world-canvas" aria-label="Самостоятельно развивающийся 3D-мир"/><div style={{position:"absolute",right:8,bottom:6,fontSize:10,color:"rgba(255,255,255,.7)",textShadow:"0 1px 3px #26332a",pointerEvents:"none"}}>Textures: Poly Haven · CC0</div></main>;
 }
